@@ -1,0 +1,20 @@
+import * as React from "react"
+
+import { cn } from "~lib/utils"
+import { buttonVariants, type ButtonVariants } from "."
+
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariants["variant"]
+  size?: ButtonVariants["size"]
+}
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, ...props }, ref) => (
+    <button
+      ref={ref}
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
+    />
+  )
+)
+Button.displayName = "Button"
