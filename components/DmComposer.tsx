@@ -181,15 +181,13 @@ export default function DmComposer({ onClose }: DmComposerProps) {
           <span>{sending ? "送信中..." : "送信"}</span>
         </Button>
 
-        {resolved && (
-          <Button
-            variant="outline"
-            className="mt-2 w-full"
-            disabled={sending}
-            onClick={onShowDm}>
-            <span>DMを表示</span>
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          className="mt-2 w-full"
+          disabled={!resolved || sending}
+          onClick={onShowDm}>
+          <span>DMを表示</span>
+        </Button>
       </div>
     </div>
   )

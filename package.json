@@ -2,7 +2,7 @@
   "name": "x-old-chat",
   "displayName": "X Chat (Old)",
   "version": "0.0.1",
-  "description": "Xの旧メッセージ機能を復活させる拡張機能",
+  "description": "Xの旧メッセージ機能を復活させるChromiumベースブラウザ向け拡張機能",
   "author": "AariyJP",
   "scripts": {
     "dev": "plasmo dev",
