@@ -35,8 +35,32 @@ export const DM_NEW2_QUERY = new URLSearchParams({
   supports_edit: "true"
 }).toString()
 
+export const DM_INBOX_QUERY = new URLSearchParams({
+  dm_users: "true",
+  include_groups: "true",
+  include_inbox_timelines: "true",
+  supports_reactions: "true",
+  ext: "mediaColor,altText,mediaStats"
+}).toString()
+
+export const DM_CONVERSATION_QUERY = new URLSearchParams({
+  context: "FETCH_DM_CONVERSATION",
+  dm_users: "true",
+  include_groups: "true",
+  supports_reactions: "true",
+  supports_edit: "true",
+  ext: "mediaColor,altText,mediaStats"
+}).toString()
+
 export const COMPOSE_PATH = "/messages/compose"
 
-export const CONVERSATIONS_PATH = "/messages/conversations"
+export const MESSAGES_PATH = "/messages"
 
 export const CHAT_PATH = "/i/chat"
+
+export const HOME_PATH = "/home"
+
+export const DIRECT_MESSAGE_TAB_SELECTOR =
+  '[data-testid="AppTabBar_DirectMessage_Link"]'
+
+export const OPEN_VIEWER_KEY = "xoc-open-viewer"

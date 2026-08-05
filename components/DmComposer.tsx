@@ -8,7 +8,7 @@ import { Input } from "~components/ui/input"
 import { Label } from "~components/ui/label"
 import { Textarea } from "~components/ui/textarea"
 import {
-  ApiError,
+  describeApiError,
   resolveUser,
   sendDirectMessage,
   type ResolvedUser
@@ -17,19 +17,13 @@ import { buildConversationId, getMyUserId } from "~lib/ids"
 
 export type DmComposerProps = {
   onClose: () => void
+  onOpenConversation: (conversationId: string) => void
 }
 
-function describe(caught: unknown): string {
-  if (caught instanceof ApiError) {
-    if (caught.resetAt) {
-      return `${caught.message}（解除予定: ${caught.resetAt.toLocaleTimeString()}）`
-    }
-    return caught.message
-  }
-  return "予期しないエラーが発生しました。"
-}
-
-export default function DmComposer({ onClose }: DmComposerProps) {
+export default function DmComposer({
+  onClose,
+  onOpenConversation
+}: DmComposerProps) {
   const [screenName, setScreenName] = useState("")
   const [text, setText] = useState("")
   const [resolved, setResolved] = useState<ResolvedUser | null>(null)
@@ -54,7 +48,7 @@ export default function DmComposer({ onClose }: DmComposerProps) {
     try {
       setResolved(await resolveUser(normalizedScreenName))
     } catch (caught) {
-      setError(describe(caught))
+      setError(describeApiError(caught))
     } finally {
       setResolving(false)
     }
@@ -75,9 +69,9 @@ export default function DmComposer({ onClose }: DmComposerProps) {
     try {
       const conversationId = buildConversationId(myId, resolved.restId)
       await sendDirectMessage(conversationId, text)
-      window.location.href = `https://x.com/messages/${conversationId}`
+      onOpenConversation(conversationId)
     } catch (caught) {
-      setError(describe(caught))
+      setError(describeApiError(caught))
     } finally {
       setSending(false)
     }
@@ -92,8 +86,7 @@ export default function DmComposer({ onClose }: DmComposerProps) {
       setError("認証エラー。x.comに再ログインしてください。")
       return
     }
-    const conversationId = buildConversationId(myId, resolved.restId)
-    window.location.href = `https://x.com/messages/${conversationId}`
+    onOpenConversation(buildConversationId(myId, resolved.restId))
   }
 
   return (

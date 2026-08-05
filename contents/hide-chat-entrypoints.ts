@@ -1,6 +1,12 @@
 import type { PlasmoCSConfig } from "plasmo"
 
-import { CHAT_PATH, COMPOSE_PATH, CONVERSATIONS_PATH } from "~lib/constants"
+import {
+  CHAT_PATH,
+  COMPOSE_PATH,
+  DIRECT_MESSAGE_TAB_SELECTOR,
+  HOME_PATH,
+  OPEN_VIEWER_KEY
+} from "~lib/constants"
 
 export const config: PlasmoCSConfig = {
   matches: ["https://x.com/*"],
@@ -8,7 +14,6 @@ export const config: PlasmoCSConfig = {
 }
 
 const HIDDEN_ATTR = "data-xoc-hidden"
-const REWIRED_ATTR = "data-xoc-rewired"
 
 function hide(element: HTMLElement) {
   if (element.hasAttribute(HIDDEN_ATTR)) {
@@ -42,11 +47,12 @@ function hideShareMenuChatItem() {
 }
 
 function redirectAwayFromChat(): boolean {
-  if (window.location.pathname.startsWith(CHAT_PATH)) {
-    window.location.replace(`https://x.com${CONVERSATIONS_PATH}`)
-    return true
+  if (!window.location.pathname.startsWith(CHAT_PATH)) {
+    return false
   }
-  return false
+  window.sessionStorage.setItem(OPEN_VIEWER_KEY, "1")
+  window.location.replace(`https://x.com${HOME_PATH}`)
+  return true
 }
 
 function hideChatDrawer() {
@@ -61,57 +67,16 @@ function hideChatBetaTab() {
     .forEach(hide)
 }
 
-function rewireDirectMessageTab() {
+function relabelDirectMessageTab() {
   document
-    .querySelectorAll<HTMLAnchorElement>(
-      '[data-testid="AppTabBar_DirectMessage_Link"]'
-    )
+    .querySelectorAll<HTMLAnchorElement>(DIRECT_MESSAGE_TAB_SELECTOR)
     .forEach((link) => {
-      link.setAttribute("href", CONVERSATIONS_PATH)
       link.setAttribute("aria-label", "メッセージ(OLD)")
       link.querySelectorAll("span").forEach((span) => {
         if (span.textContent === "チャット") {
           span.textContent = "メッセージ(OLD)"
         }
       })
-      if (link.hasAttribute(REWIRED_ATTR)) {
-        return
-      }
-      link.setAttribute(REWIRED_ATTR, "1")
-      link.addEventListener(
-        "click",
-        (event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          window.location.assign(`https://x.com${CONVERSATIONS_PATH}`)
-        },
-        true
-      )
-    })
-}
-
-function rewireMessagesBackButton() {
-  if (!window.location.pathname.startsWith("/messages")) {
-    return
-  }
-  document
-    .querySelectorAll<HTMLElement>(
-      `[data-testid="app-bar-back"]:not([${REWIRED_ATTR}])`
-    )
-    .forEach((button) => {
-      button.setAttribute(REWIRED_ATTR, "1")
-      button.addEventListener(
-        "click",
-        (event) => {
-          if (!window.location.pathname.startsWith("/messages")) {
-            return
-          }
-          event.preventDefault()
-          event.stopPropagation()
-          window.history.back()
-        },
-        true
-      )
     })
 }
 
@@ -123,8 +88,7 @@ function sweep() {
   hideShareMenuChatItem()
   hideChatDrawer()
   hideChatBetaTab()
-  rewireDirectMessageTab()
-  rewireMessagesBackButton()
+  relabelDirectMessageTab()
 }
 
 sweep()

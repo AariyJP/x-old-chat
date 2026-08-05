@@ -3,7 +3,13 @@ import type { PlasmoCSConfig, PlasmoGetStyle } from "plasmo"
 import { useEffect, useState } from "react"
 
 import DmComposer from "~components/DmComposer"
-import { COMPOSE_PATH } from "~lib/constants"
+import DmViewer from "~components/DmViewer"
+import {
+  CHAT_PATH,
+  COMPOSE_PATH,
+  MESSAGES_PATH,
+  OPEN_VIEWER_KEY
+} from "~lib/constants"
 
 export const config: PlasmoCSConfig = {
   matches: ["https://x.com/*"],
@@ -19,32 +25,69 @@ export const getStyle: PlasmoGetStyle = () => {
 const HOOKED_ATTR = "data-xoc-hooked"
 
 export default function DmModal() {
-  const [open, setOpen] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+
+  function openViewer(id: string | null) {
+    setConversationId(id)
+    setComposerOpen(false)
+    setViewerOpen(true)
+  }
+
+  function openComposer() {
+    setComposerOpen(true)
+  }
 
   useEffect(() => {
-    function hookComposeLinks() {
-      const links = document.querySelectorAll<HTMLAnchorElement>(
-        `a[href^="${COMPOSE_PATH}"]:not([${HOOKED_ATTR}])`
-      )
-      for (const link of links) {
-        if (link.closest('[role="menuitem"]')) {
-          continue
-        }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || (!composerOpen && !viewerOpen)) {
+        return
+      }
+      event.stopPropagation()
+      if (composerOpen) {
+        setComposerOpen(false)
+        return
+      }
+      setViewerOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
+  }, [composerOpen, viewerOpen])
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem(OPEN_VIEWER_KEY)) {
+      window.sessionStorage.removeItem(OPEN_VIEWER_KEY)
+      openViewer(null)
+    }
+
+    function hookLinks() {
+      const selector = [
+        `a[href^="${MESSAGES_PATH}"]:not([${HOOKED_ATTR}])`,
+        `a[href^="${CHAT_PATH}"]:not([${HOOKED_ATTR}])`
+      ].join(", ")
+      for (const link of document.querySelectorAll<HTMLAnchorElement>(
+        selector
+      )) {
         link.setAttribute(HOOKED_ATTR, "1")
         link.addEventListener(
           "click",
           (event) => {
             event.preventDefault()
             event.stopPropagation()
-            setOpen(true)
+            if ((link.getAttribute("href") ?? "").startsWith(COMPOSE_PATH)) {
+              openComposer()
+              return
+            }
+            openViewer(null)
           },
           true
         )
       }
     }
 
-    hookComposeLinks()
-    const observer = new MutationObserver(hookComposeLinks)
+    hookLinks()
+    const observer = new MutationObserver(hookLinks)
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true
@@ -52,5 +95,21 @@ export default function DmModal() {
     return () => observer.disconnect()
   }, [])
 
-  return open ? <DmComposer onClose={() => setOpen(false)} /> : null
+  return (
+    <>
+      {viewerOpen && (
+        <DmViewer
+          initialConversationId={conversationId}
+          onNewMessage={openComposer}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
+      {composerOpen && (
+        <DmComposer
+          onClose={() => setComposerOpen(false)}
+          onOpenConversation={openViewer}
+        />
+      )}
+    </>
+  )
 }

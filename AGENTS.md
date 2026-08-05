@@ -24,12 +24,35 @@
 - **もし将来ストア審査等で問題になった場合**: `build/chrome-mv3-prod/manifest.json` から
   該当 `web_accessible_resources` エントリを手動で削除してから `pnpm package` すればよい。
 
+## ルーティング方針（最重要・変更時の注意）
+
+**x.com のどのパスへもナビゲートしてはならない。** UI は全画面オーバーレイで提供し、X の SPA ルーターには一切触れない。
+
+- 2026-08-05 時点で `/messages` と `/messages/conversations` も封鎖された。サーバーは 200 を返すが、
+  `main.js` の React Router (`history` パッケージ) の `confirmTransitionTo` が `history.replaceState("/i/chat")`
+  を呼ぶクライアントサイドのルート差し替えで、放置すると `/i/chat/pin/new`（XChat のパスコード新規設定
+  ＝**不可逆移行の入口**）まで自動で到達する。
+- したがって `location.assign` / `location.href` 代入 / リンクのデフォルト遷移で `/messages` 配下や
+  `/i/chat` 配下へ行かせないこと。DM 導線のリンクはキャプチャフェーズで `preventDefault()` して
+  オーバーレイを開くだけにする（`contents/dm-modal.tsx`）。
+- **`/i/chat` → `/messages/conversations` へのリダイレクトは絶対に書かないこと。** X 側が逆方向へ
+  差し戻すため無限ループになる（この拡張の旧実装が実際にそうなっていた）。`/i/chat` に迷い込んだ場合の
+  離脱先は `/home` とし、`sessionStorage` のフラグ経由でオーバーレイを自動的に開く。
+- 旧 REST DM API（`dm/inbox_initial_state.json` / `dm/conversation/<id>.json` / `dm/new2.json`）は
+  生きており本文を平文で返す。封鎖されたのは UI だけなので、閲覧・送信はすべて直接 fetch で完結させる。
+
 ## スタイリングの前提（変更時の注意）
 
 - UI は shadcn/ui 流の素の React コンポーネント（`components/ui/`）+ Tailwind。reka-ui / @radix-ui は不使用。
+  reka-ui は Vue 3 用のため、そもそも本プロジェクト（React）では使えない。
+- Radix を導入しない理由: Dialog / DropdownMenu / Tooltip / Popover の Portal は `document.body` に出るため、
+  shadow DOM 内に注入した Tailwind が届かず無装飾になる（`container` prop での回避は全箇所対応が必要）。
+  現状必要な部品はいずれも Portal 不要で、素の実装で足りている。
 - モーダルは content script の **shadow DOM** 内にマウントされるため、ページ（x.com）の CSS は届かない。
   Tailwind でコンパイルした `styles/globals.css` を `getStyle` で shadow DOM に注入して初めて装飾される。
   この CSS 注入は必須部品であり削除しないこと。
+- `rem` は x.com のルート `font-size`（実測 14px）を参照するため、Tailwind の `rem` 系サイズは
+  標準の 16px 基準より約 12% 小さく出る。実害はないが、幅の実測値が想定と合わないときはこれが理由。
 
 ## 権限方針（審査向け）
 

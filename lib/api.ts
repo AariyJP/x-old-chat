@@ -31,7 +31,17 @@ export class ApiError extends Error {
   }
 }
 
-function buildHeaders(withContentType: boolean): HeadersInit {
+export function describeApiError(caught: unknown): string {
+  if (caught instanceof ApiError) {
+    if (caught.resetAt) {
+      return `${caught.message}（解除予定: ${caught.resetAt.toLocaleTimeString()}）`
+    }
+    return caught.message
+  }
+  return "予期しないエラーが発生しました。"
+}
+
+export function buildHeaders(withContentType: boolean): HeadersInit {
   const csrf = getCsrfToken()
   if (!csrf) {
     throw new ApiError(
@@ -51,12 +61,12 @@ function buildHeaders(withContentType: boolean): HeadersInit {
   return headers
 }
 
-function parseRateLimit(response: Response): Date | undefined {
+export function parseRateLimit(response: Response): Date | undefined {
   const reset = response.headers.get("x-rate-limit-reset")
   return reset ? new Date(Number(reset) * 1000) : undefined
 }
 
-function isRateLimited(response: Response): boolean {
+export function isRateLimited(response: Response): boolean {
   return (
     response.status === 429 ||
     response.headers.get("x-rate-limit-remaining") === "0"
