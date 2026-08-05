@@ -3,6 +3,8 @@ export const BEARER_TOKEN =
 
 export const API_BASE = "https://x.com/i/api"
 
+export const LIVE_PIPELINE_BASE = "https://api.x.com"
+
 export const USER_BY_SCREEN_NAME_QUERY_ID_FALLBACK =
   "2qvSHpkWTMS9i0zJAwDNiA"
 

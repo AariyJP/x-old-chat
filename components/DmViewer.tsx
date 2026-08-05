@@ -14,6 +14,7 @@ import {
   type DmUser
 } from "~lib/dm"
 import { getMyUserId } from "~lib/ids"
+import { subscribeDmUpdates } from "~lib/livePipeline"
 import { cn } from "~lib/utils"
 
 export type DmViewerProps = {
@@ -112,7 +113,17 @@ export default function DmViewer({
   const [loadingMore, setLoadingMore] = useState(false)
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
+  const [autoScrollKey, setAutoScrollKey] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  function appendNewMessages(incoming: DmMessage[]) {
+    setMessages((previous) => {
+      const known = new Set(previous.map((message) => message.id))
+      const fresh = incoming.filter((message) => !known.has(message.id))
+      return fresh.length === 0 ? previous : [...previous, ...fresh]
+    })
+    setAutoScrollKey((key) => key + 1)
+  }
 
   useEffect(() => {
     if (!myId) {
@@ -181,7 +192,30 @@ export default function DmViewer({
     if (!threadLoading) {
       bottomRef.current?.scrollIntoView()
     }
-  }, [selectedId, threadLoading])
+  }, [selectedId, threadLoading, autoScrollKey])
+
+  useEffect(() => {
+    if (!selectedId) {
+      return
+    }
+    let cancelled = false
+    const unsubscribe = subscribeDmUpdates(selectedId, () => {
+      void (async () => {
+        try {
+          const thread = await fetchConversation(selectedId)
+          if (!cancelled) {
+            appendNewMessages(thread.messages)
+          }
+        } catch {
+          return
+        }
+      })()
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [selectedId])
 
   const selected =
     conversations.find((conversation) => conversation.id === selectedId) ?? null
@@ -227,10 +261,7 @@ export default function DmViewer({
     try {
       await sendDirectMessage(selectedId, text)
       setText("")
-      const thread = await fetchConversation(selectedId)
-      setMessages(thread.messages)
-      setMinEntryId(thread.minEntryId)
-      setAtEnd(thread.atEnd)
+      appendNewMessages((await fetchConversation(selectedId)).messages)
     } catch (caught) {
       setThreadError(describeApiError(caught))
     } finally {
