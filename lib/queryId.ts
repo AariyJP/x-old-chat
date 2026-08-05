@@ -9,9 +9,9 @@ let cached: string | null = null
 
 function extractFrom(source: string): string | null {
   for (const pattern of PATTERNS) {
-    const match = source.match(pattern)
-    if (match) {
-      return match[1]
+    const queryId = source.match(pattern)?.[1]
+    if (queryId) {
+      return queryId
     }
   }
   return null

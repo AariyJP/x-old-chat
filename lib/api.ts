@@ -41,7 +41,9 @@ export function describeApiError(caught: unknown): string {
   return "予期しないエラーが発生しました。"
 }
 
-export function buildHeaders(withContentType: boolean): HeadersInit {
+export function buildHeaders(
+  withContentType: boolean
+): Record<string, string> {
   const csrf = getCsrfToken()
   if (!csrf) {
     throw new ApiError(
