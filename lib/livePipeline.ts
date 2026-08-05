@@ -28,6 +28,7 @@ export function subscribeDmUpdates(
   let silenceTimer: ReturnType<typeof setTimeout> | null = null
   let sessionId: string | null = null
   let failures = 0
+  let established = false
 
   function stopRefreshTimer() {
     if (refreshTimer) {
@@ -84,6 +85,10 @@ export function subscribeDmUpdates(
       sessionId = id
       stopRefreshTimer()
       refreshTimer = setInterval(refreshSubscription, SUBSCRIPTION_REFRESH_MS)
+      if (established) {
+        onUpdate()
+      }
+      established = true
     }
     if (parsed.payload?.dm_update) {
       onUpdate()

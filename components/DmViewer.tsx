@@ -42,16 +42,38 @@ function formatTime(time: number): string {
   })
 }
 
+function isSameMessage(left: DmMessage, right: DmMessage): boolean {
+  return (
+    left.time === right.time &&
+    left.senderId === right.senderId &&
+    left.reactions.length === right.reactions.length &&
+    left.reactions.every((emoji, index) => emoji === right.reactions[index]) &&
+    left.segments.length === right.segments.length &&
+    left.segments.every((segment, index) => {
+      const other = right.segments[index]
+      return segment.text === other?.text && segment.href === other?.href
+    })
+  )
+}
+
 function mergeMessages(
   previous: DmMessage[],
   incoming: DmMessage[]
 ): DmMessage[] {
-  const known = new Set(previous.map((message) => message.id))
-  const fresh = incoming.filter((message) => !known.has(message.id))
-  if (fresh.length === 0) {
+  const byId = new Map(previous.map((message) => [message.id, message]))
+  let changed = false
+  for (const message of incoming) {
+    const current = byId.get(message.id)
+    if (current && isSameMessage(current, message)) {
+      continue
+    }
+    byId.set(message.id, message)
+    changed = true
+  }
+  if (!changed) {
     return previous
   }
-  return [...previous, ...fresh].sort((left, right) => left.time - right.time)
+  return [...byId.values()].sort((left, right) => left.time - right.time)
 }
 
 function MessageBubble({
@@ -133,13 +155,13 @@ export default function DmViewer({
     messagesRef.current = messages
   }, [messages])
 
-  function appendNewMessages(incoming: DmMessage[]) {
+  function applyThreadMessages(incoming: DmMessage[]) {
     const known = new Set(messagesRef.current.map((message) => message.id))
-    if (!incoming.some((message) => !known.has(message.id))) {
-      return
-    }
+    const hasNew = incoming.some((message) => !known.has(message.id))
     setMessages((previous) => mergeMessages(previous, incoming))
-    setAutoScrollKey((key) => key + 1)
+    if (hasNew) {
+      setAutoScrollKey((key) => key + 1)
+    }
   }
 
   useEffect(() => {
@@ -233,7 +255,7 @@ export default function DmViewer({
           if (cancelled) {
             return
           }
-          appendNewMessages(thread.messages)
+          applyThreadMessages(thread.messages)
           if (!pending) {
             return
           }
@@ -296,7 +318,7 @@ export default function DmViewer({
     try {
       await sendDirectMessage(selectedId, text)
       setText("")
-      appendNewMessages((await fetchConversation(selectedId)).messages)
+      applyThreadMessages((await fetchConversation(selectedId)).messages)
     } catch (caught) {
       setThreadError(describeApiError(caught))
     } finally {
