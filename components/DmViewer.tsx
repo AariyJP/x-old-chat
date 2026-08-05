@@ -42,6 +42,18 @@ function formatTime(time: number): string {
   })
 }
 
+function mergeMessages(
+  previous: DmMessage[],
+  incoming: DmMessage[]
+): DmMessage[] {
+  const known = new Set(previous.map((message) => message.id))
+  const fresh = incoming.filter((message) => !known.has(message.id))
+  if (fresh.length === 0) {
+    return previous
+  }
+  return [...previous, ...fresh].sort((left, right) => left.time - right.time)
+}
+
 function MessageBubble({
   message,
   mine
@@ -115,13 +127,18 @@ export default function DmViewer({
   const [sending, setSending] = useState(false)
   const [autoScrollKey, setAutoScrollKey] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<DmMessage[]>([])
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   function appendNewMessages(incoming: DmMessage[]) {
-    setMessages((previous) => {
-      const known = new Set(previous.map((message) => message.id))
-      const fresh = incoming.filter((message) => !known.has(message.id))
-      return fresh.length === 0 ? previous : [...previous, ...fresh]
-    })
+    const known = new Set(messagesRef.current.map((message) => message.id))
+    if (!incoming.some((message) => !known.has(message.id))) {
+      return
+    }
+    setMessages((previous) => mergeMessages(previous, incoming))
     setAutoScrollKey((key) => key + 1)
   }
 
@@ -169,7 +186,7 @@ export default function DmViewer({
         if (cancelled) {
           return
         }
-        setMessages(thread.messages)
+        setMessages((previous) => mergeMessages(previous, thread.messages))
         setUsers((previous) => ({ ...thread.users, ...previous }))
         setMinEntryId(thread.minEntryId)
         setAtEnd(thread.atEnd)
@@ -198,19 +215,37 @@ export default function DmViewer({
     if (!selectedId) {
       return
     }
+    const conversationId = selectedId
     let cancelled = false
-    const unsubscribe = subscribeDmUpdates(selectedId, () => {
-      void (async () => {
-        try {
-          const thread = await fetchConversation(selectedId)
-          if (!cancelled) {
-            appendNewMessages(thread.messages)
+    let refreshing = false
+    let pending = false
+
+    async function refresh() {
+      if (refreshing) {
+        pending = true
+        return
+      }
+      refreshing = true
+      try {
+        for (;;) {
+          pending = false
+          const thread = await fetchConversation(conversationId)
+          if (cancelled) {
+            return
           }
-        } catch {
-          return
+          appendNewMessages(thread.messages)
+          if (!pending) {
+            return
+          }
         }
-      })()
-    })
+      } catch {
+        return
+      } finally {
+        refreshing = false
+      }
+    }
+
+    const unsubscribe = subscribeDmUpdates(conversationId, () => void refresh())
     return () => {
       cancelled = true
       unsubscribe()
@@ -242,7 +277,7 @@ export default function DmViewer({
     setThreadError("")
     try {
       const thread = await fetchConversation(selectedId, minEntryId)
-      setMessages((previous) => [...thread.messages, ...previous])
+      setMessages((previous) => mergeMessages(previous, thread.messages))
       setMinEntryId(thread.minEntryId)
       setAtEnd(thread.atEnd || thread.messages.length === 0)
     } catch (caught) {

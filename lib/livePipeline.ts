@@ -1,18 +1,19 @@
-import { BEARER_TOKEN, LIVE_PIPELINE_BASE } from "~lib/constants"
-import { getCsrfToken } from "~lib/cookies"
+import { ApiError, buildHeaders } from "~lib/api"
+import { LIVE_PIPELINE_BASE } from "~lib/constants"
 
 const SUBSCRIPTION_REFRESH_MS = 45000
 
 const SILENCE_TIMEOUT_MS = 60000
 
-const RECONNECT_DELAY_MS = 2000
+const RECONNECT_BASE_MS = 2000
 
-function buildLiveHeaders(): Record<string, string> {
-  return {
-    authorization: BEARER_TOKEN,
-    "x-csrf-token": getCsrfToken() ?? "",
-    "x-twitter-auth-type": "OAuth2Session",
-    "x-twitter-active-user": "yes"
+const RECONNECT_MAX_MS = 60000
+
+type LivePipelineMessage = {
+  topic?: string
+  payload?: {
+    config?: { session_id?: string }
+    dm_update?: { conversation_id?: string; user_id?: string }
   }
 }
 
@@ -26,6 +27,14 @@ export function subscribeDmUpdates(
   let refreshTimer: ReturnType<typeof setInterval> | null = null
   let silenceTimer: ReturnType<typeof setTimeout> | null = null
   let sessionId: string | null = null
+  let failures = 0
+
+  function stopRefreshTimer() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = null
+    }
+  }
 
   function armSilenceTimer() {
     if (silenceTimer) {
@@ -39,21 +48,24 @@ export function subscribeDmUpdates(
       return
     }
     try {
-      await fetch(
+      const response = await fetch(
         `${LIVE_PIPELINE_BASE}/1.1/live_pipeline/update_subscriptions`,
         {
           method: "POST",
           credentials: "include",
           headers: {
-            ...buildLiveHeaders(),
+            ...buildHeaders(false),
             "content-type": "application/x-www-form-urlencoded",
             "livepipeline-session": sessionId
           },
           body: new URLSearchParams({ sub_topics: topic, unsub_topics: "" })
         }
       )
+      if (!response.ok) {
+        controller?.abort()
+      }
     } catch {
-      return
+      controller?.abort()
     }
   }
 
@@ -61,21 +73,19 @@ export function subscribeDmUpdates(
     if (line.trim().length === 0) {
       return
     }
-    let parsed: any
+    let parsed: LivePipelineMessage
     try {
       parsed = JSON.parse(line)
     } catch {
       return
     }
-    const id = parsed?.payload?.config?.session_id
+    const id = parsed.payload?.config?.session_id
     if (id) {
       sessionId = id
-      if (refreshTimer) {
-        clearInterval(refreshTimer)
-      }
+      stopRefreshTimer()
       refreshTimer = setInterval(refreshSubscription, SUBSCRIPTION_REFRESH_MS)
     }
-    if (parsed?.payload?.dm_update) {
+    if (parsed.payload?.dm_update) {
       onUpdate()
     }
   }
@@ -87,10 +97,17 @@ export function subscribeDmUpdates(
       `${LIVE_PIPELINE_BASE}/live_pipeline/events?topic=${encodeURIComponent(topic)}`,
       {
         credentials: "include",
-        headers: buildLiveHeaders(),
+        headers: buildHeaders(false),
         signal: controller.signal
       }
     )
+    if (!response.ok) {
+      throw new ApiError(
+        `live pipeline responded ${response.status}`,
+        response.status === 429 ? "rate_limit" : "unknown"
+      )
+    }
+    failures = 0
     const reader = response.body?.getReader()
     if (!reader) {
       return
@@ -117,14 +134,18 @@ export function subscribeDmUpdates(
       try {
         await readStream()
       } catch {
-        if (closed) {
-          return
-        }
+        failures += 1
       }
+      stopRefreshTimer()
+      sessionId = null
       if (closed) {
         return
       }
-      await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS))
+      const delay = Math.min(
+        RECONNECT_BASE_MS * 2 ** failures,
+        RECONNECT_MAX_MS
+      )
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
 
@@ -133,9 +154,7 @@ export function subscribeDmUpdates(
   return () => {
     closed = true
     controller?.abort()
-    if (refreshTimer) {
-      clearInterval(refreshTimer)
-    }
+    stopRefreshTimer()
     if (silenceTimer) {
       clearTimeout(silenceTimer)
     }
