@@ -66,3 +66,16 @@ export const DIRECT_MESSAGE_TAB_SELECTOR =
   '[data-testid="AppTabBar_DirectMessage_Link"]'
 
 export const OPEN_VIEWER_KEY = "xoc-open-viewer"
+
+export const XCHAT_GRAPHQL_BASE = "https://api.x.com/graphql"
+
+export const XCHAT_OPERATIONS = {
+  GetPublicKeysQuery: "C-YphxeIcPLOGtFNGhkuOw",
+  GetInitialXChatPageQuery: "Q4Mw0C6YcnjJac21wq-5NA",
+  GetConversationPageQuery: "GX9ZijkxG8AqRMQVD7hMnQ",
+  SendMessageCreateMutation: "TWRPP7gnKwV_R8-tE-Dd3Q"
+} as const
+
+export const XCHAT_KEYS_MESSAGE = "xoc-xchat-keys"
+
+export const XCHAT_CONVERSATION_PREFIX = "xchat:"

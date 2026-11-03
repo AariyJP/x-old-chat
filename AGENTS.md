@@ -59,3 +59,37 @@
 - 権限は x.com 限定。`permissions` / `host_permissions` はいずれも付与しない
   （content script は同一オリジンで動くため `host_permissions` 不要）。
 - content script の `matches` は `https://x.com/*` のみ。
+- 暗号化チャット（XChat）のために background service worker を置いているが、権限は追加していない。
+  WASM（`chat_xdk_wasm_bg.wasm` / `juicebox-sdk_bg.wasm`）は content script から読むため
+  `web_accessible_resources` に載る（Plasmo が自動登録）。
+
+## 暗号化チャット（XChat）
+
+- 実装は iOS 版（`ajpx0/x-chat-old-ios`）の `App/XChat/` と `notification-server/src/xchat/` を移植したもの。
+  GraphQL の queryId・手順の根拠は iOS 版の AGENTS.md を参照。
+- 復号は `@xdevplatform/chat-xdk` の WASM（`pkg/chat_xdk_wasm.js`）を直接使う。パッケージの `index.js`
+  （`createChat`）は Node 用の動的 import（`fs` など）と `juicebox-sdk` の ESM WASM import を含み
+  Parcel でバンドルできないため使わない。Juicebox の PIN 復元は `juicebox-sdk/juicebox-sdk_bg.js` を
+  自前で初期化して `Client.recover` を呼び、得た鍵を `Chat.importKeys` に渡す。
+- 復元した鍵は background の IndexedDB（拡張機能のオリジン）に保存する。x.com の localStorage には
+  置かないこと（x.com のスクリプトから読めてしまう）。ロックすると削除する。
+- 受信箱では相手が同じ 1 対 1 の旧 DM と XChat を 1 行にまとめる。暗号化なしの XChat メッセージは旧 DM の
+  コピーで `sequence_id` が旧 DM のメッセージ ID と同じなので、メッセージ ID を `sequence_id` にして重複を除く。
+- **PIN を間違え続けると鍵を復元できなくなる。** テストは正しい PIN で行う。
+- 暗号化チャット（XChat）のために background service worker を置いているが、権限は追加していない。
+  WASM（`chat_xdk_wasm_bg.wasm` / `juicebox-sdk_bg.wasm`）は content script から読むため
+  `web_accessible_resources` に載る（Plasmo が自動登録）。
+
+## 暗号化チャット（XChat）
+
+- 実装は iOS 版（`ajpx0/x-chat-old-ios`）の `App/XChat/` と `notification-server/src/xchat/` を移植したもの。
+  GraphQL の queryId・手順の根拠は iOS 版の AGENTS.md を参照。
+- 復号は `@xdevplatform/chat-xdk` の WASM（`pkg/chat_xdk_wasm.js`）を直接使う。パッケージの `index.js`
+  （`createChat`）は Node 用の動的 import（`fs` など）と `juicebox-sdk` の ESM WASM import を含み
+  Parcel でバンドルできないため使わない。Juicebox の PIN 復元は `juicebox-sdk/juicebox-sdk_bg.js` を
+  自前で初期化して `Client.recover` を呼び、得た鍵を `Chat.importKeys` に渡す。
+- 復元した鍵は background の IndexedDB（拡張機能のオリジン）に保存する。x.com の localStorage には
+  置かないこと（x.com のスクリプトから読めてしまう）。ロックすると削除する。
+- 受信箱では相手が同じ 1 対 1 の旧 DM と XChat を 1 行にまとめる。暗号化なしの XChat メッセージは旧 DM の
+  コピーで `sequence_id` が旧 DM のメッセージ ID と同じなので、メッセージ ID を `sequence_id` にして重複を除く。
+- **PIN を間違え続けると鍵を復元できなくなる。** テストは正しい PIN で行う。

@@ -49,8 +49,20 @@ type XApiMessage = {
   message_reactions?: XApiReaction[]
 }
 
+type XApiCall = {
+  id?: string
+  time?: string
+  conversation_id?: string
+  call_type?: string
+  end_reason?: string
+  is_caller?: boolean
+  started_at_ms?: string
+  ended_at_ms?: string
+}
+
 type XApiEntry = {
   message?: XApiMessage
+  end_av_broadcast?: XApiCall
 }
 
 type XApiParticipant = {
@@ -103,6 +115,10 @@ export type DmMessage = {
   senderId: string
   segments: DmTextSegment[]
   reactions: string[]
+  encrypted?: boolean
+  verified?: boolean
+  fromXChat?: boolean
+  event?: "call" | "encrypted"
 }
 
 export type DmConversation = {
@@ -113,6 +129,8 @@ export type DmConversation = {
   sortTime: number
   unread: boolean
   readOnly: boolean
+  xchatId: string | null
+  previewEncrypted: boolean
 }
 
 export type DmInbox = {
@@ -190,7 +208,46 @@ function toSegments(text: string, entities?: XApiEntities): DmTextSegment[] {
     })
 }
 
+export function formatDuration(seconds: number): string {
+  const total = Math.floor(seconds)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`
+}
+
+function callLabel(call: XApiCall): string {
+  const kind = call.call_type === "AUDIO_ONLY" ? "音声通話" : "ビデオ通話"
+  const caller = call.is_caller === true
+  switch (call.end_reason) {
+    case "CANCELED":
+      return caller ? `${kind}をキャンセルしました` : `${kind}の不在着信`
+    case "MISSED":
+      return `${kind}の不在着信`
+    case "TIMED_OUT":
+      return caller ? `${kind}に応答がありませんでした` : `${kind}の不在着信`
+    case "DECLINED":
+      return caller ? `${kind}が拒否されました` : `${kind}を拒否しました`
+  }
+  const duration = Number(call.ended_at_ms) - Number(call.started_at_ms)
+  return duration > 0 ? `${kind} ${formatDuration(duration / 1000)}` : kind
+}
+
+function parseCall(call: XApiCall): DmMessage | null {
+  if (!call.id) {
+    return null
+  }
+  return {
+    id: call.id,
+    time: Number(call.ended_at_ms ?? call.time ?? 0),
+    senderId: "",
+    segments: [{ text: callLabel(call) }],
+    reactions: [],
+    event: "call"
+  }
+}
+
 function parseMessage(entry: XApiEntry): DmMessage | null {
+  if (entry.end_av_broadcast) {
+    return parseCall(entry.end_av_broadcast)
+  }
   const message = entry.message
   const data = message?.message_data
   if (!message?.id || !data) {
@@ -226,7 +283,8 @@ export async function fetchInbox(myId: string): Promise<DmInbox> {
 
   const previews = new Map<string, DmMessage>()
   for (const entry of state.entries ?? []) {
-    const conversationId = entry.message?.conversation_id
+    const conversationId =
+      entry.message?.conversation_id ?? entry.end_av_broadcast?.conversation_id
     const message = parseMessage(entry)
     if (!conversationId || !message) {
       continue
@@ -259,7 +317,9 @@ export async function fetchInbox(myId: string): Promise<DmInbox> {
           conversation.max_entry_id,
           mine?.last_read_event_id ?? conversation.last_read_event_id
         ),
-        readOnly: conversation.read_only === true
+        readOnly: conversation.read_only === true,
+        xchatId: null,
+        previewEncrypted: false
       }
     })
     .filter((conversation): conversation is DmConversation => conversation !== null)

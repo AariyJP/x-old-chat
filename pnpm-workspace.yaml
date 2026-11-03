@@ -5,3 +5,5 @@ allowBuilds:
   lmdb: true
   msgpackr-extract: true
   sharp: true
+minimumReleaseAgeExclude:
+  - '@xdevplatform/chat-xdk@0.7.2'
